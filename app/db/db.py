@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, create_engine, Session
 
 DATABASE_URL = "sqlite:///data/dockify.db"
-engine = create_engine(DATABASE_URL,echo=True)
+engine = create_engine(DATABASE_URL)
 
 
 def init_db():

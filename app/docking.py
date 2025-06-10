@@ -303,19 +303,40 @@ class DockingWrapper:
 
         best_index, best_pose, best_score = 0, None, float('inf')
         for result in job.complexes:
+            print("#############resultid, violation", result.id, result.violation)
             if result.delta_g < best_score and len(result.violation) == 0:
                 best_score = result.delta_g
                 best_pose = work_poses[result.id - job.runs] if result.id - job.runs >= 0 else None
                 best_index = result.id
 
+        # if best_pose is None:
+        #     with open("app/static/poses/" + job.job_id + "#best.pkl", "rb") as f:
+        #         best_pose = pickle.load(f)
+        #     calc_for = filter(lambda r: r.id >= job.runs, job.complexes)
+        # else:
+        #     with open("app/static/poses/" + job.job_id + "#best.pkl", "wb") as f:
+        #         pickle.dump(best_pose, f)
+        #     calc_for = job.complexes
+
+
+        all_poses = []
         if best_pose is None:
-            with open("app/static/poses/" + job.job_id + "#best.pkl", "rb") as f:
+            with open("app/static/poses/" + job.job_id + "#" + str(best_index) + ".pkl", "rb") as f:
                 best_pose = pickle.load(f)
-            calc_for = filter(lambda r: r.id >= job.runs, job.complexes)
+            for i in range(job.runs, len(job.complexes)):
+                with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "wb") as f:
+                    pickle.dump(work_poses[i - job.runs], f)
+            calc_for_all = False
         else:
-            with open("app/static/poses/" + job.job_id + "#best.pkl", "wb") as f:
-                pickle.dump(best_pose, f)
-            calc_for = job.complexes
+            if job.runs > 0:
+                for i in range(job.runs):
+                    with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "rb") as f:
+                        all_poses.append(pickle.load(f))
+            for i in range(job.runs, len(job.complexes)):
+                with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "wb") as f:
+                    pickle.dump(work_poses[i - job.runs], f)
+            all_poses.extend(work_poses)
+            calc_for_all = True
 
 
         res_selector = self.pyrosetta.rosetta.core.select.residue_selector.ResidueIndexSelector(
@@ -324,8 +345,12 @@ class DockingWrapper:
         rmsd_calc.set_residue_selector(res_selector)
         rmsd_calc.set_comparison_pose(best_pose)
 
-        for result in calc_for:
-            result.rmsd = rmsd_calc.calculate(work_poses[result.id - job.runs])
+        if calc_for_all:
+            for result in job.complexes:
+                result.rmsd = rmsd_calc.calculate(all_poses[result.id])
+        else:
+            for result in filter(lambda r: r.id >= job.runs, job.complexes):
+                result.rmsd = rmsd_calc.calculate(work_poses[result.id - job.runs])
 
 
         header = ['name']
