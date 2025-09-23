@@ -399,16 +399,6 @@ class DockingWrapper:
                   str(', '.join(job.complexes[i].violation)).rjust(padding), sep='')
 
 
-    def generate_assets(self, job: DockingJob, work_poses, rdkit_mol):
-        withoutHs = Chem.RemoveHs(rdkit_mol)
-        AllChem.Compute2DCoords(withoutHs)
-        drawer = rdMolDraw2D.MolDraw2DSVG(500, 500)
-        drawer.DrawMolecule(rdMolDraw2D.PrepareMolForDrawing(withoutHs))
-        drawer.FinishDrawing()
-        with open('app/static/previews/' + job.job_id + '.svg', 'w') as f:
-            f.write(drawer.GetDrawingText())
-
-
     def run_docking(self, job_id: str, runs: int):
         with Session(engine) as dbsession:
             job = dbsession.get(DockingJob, job_id)
@@ -453,8 +443,6 @@ class DockingWrapper:
                 update(self.loop, dbsession, job)
 
                 self.analyze_results(job, dbsession, work_poses, new_mol)
-
-                self.generate_assets(job, work_poses, new_mol)
 
                 job.progress_info = "Finalized Calculation..."
                 job.progress = 100

@@ -1,15 +1,13 @@
-import asyncio
 import os
 
 from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, status
-from rdkit import Chem
-from rdkit.Chem.Draw import rdMolDraw2D
 from sqlmodel import Session, select
 
 from ..db.db import get_session
 from ..dependencies import get_docking_wrapper
 from .. import docking
 from ..models import *
+from ..util import draw2D
 from ..websocket_handler import get_job_status
 
 router = APIRouter()
@@ -22,11 +20,9 @@ def create_job(request: DockingJob, session: Session = Depends(get_session)):
     """
     session.add(request)
     session.commit()
-    drawer = rdMolDraw2D.MolDraw2DSVG(1000, 1000)
-    drawer.DrawMolecule(rdMolDraw2D.PrepareMolForDrawing(Chem.MolFromSmiles(request.smiles)))
-    drawer.FinishDrawing()
-    with open('app/static/previews/' + request.job_id + '.svg', 'w') as f:
-        f.write(drawer.GetDrawingText())
+
+    draw2D(request.job_id, request.smiles)
+
     return {request.model_dump_json()}
 
 

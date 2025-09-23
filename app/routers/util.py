@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
 from openbabel import pybel
 from pydantic import BaseModel
-from rdkit.Chem.Draw import rdMolDraw2D
 from sqlmodel import Session
 from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors, QED
 
 from app.db.db import get_session
 from app.models import DockingJob
+from app.util import draw2D
 
 router = APIRouter()
 
@@ -24,15 +24,13 @@ def generate_conformer(conf: ConfBase, session: Session = Depends(get_session)):
     AllChem.EmbedMolecule(mol_rdkit)
     sdf = Chem.MolToMolBlock(mol_rdkit)
 
-    job = session.get(DockingJob, conf.job_id)
+    job: DockingJob | None  = session.get(DockingJob, conf.job_id)
     if job:
         job.smiles = conf.smiles
-        drawer = rdMolDraw2D.MolDraw2DSVG(1000, 1000)
-        drawer.DrawMolecule(rdMolDraw2D.PrepareMolForDrawing(mol_rdkit))
-        drawer.FinishDrawing()
-        with open('app/static/previews/' + conf.job_id + '.svg', 'w') as f:
-            f.write(drawer.GetDrawingText())
         job.sdf = sdf
+
+        draw2D(job.job_id, job.smiles)
+
         session.add(job)
         session.commit()
 
