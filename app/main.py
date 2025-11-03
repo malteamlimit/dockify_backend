@@ -8,7 +8,7 @@ from starlette.responses import HTMLResponse
 
 from . import docking
 from .db import db
-from .routers import util, jobs, data
+from .routers import util, jobs, database
 # from .dependencies import thread_local_data
 
 
@@ -50,7 +50,7 @@ app.mount("/static", StaticFiles(directory="app/static/"), name="static")
 
 app.include_router(util.router)
 app.include_router(jobs.router)
-# app.include_router(data.router)
+app.include_router(database.router)
 
 
 # @app.get("/")

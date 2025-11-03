@@ -8,6 +8,12 @@ def init_db():
     SQLModel.metadata.create_all(engine)
 
 
+def recreate_engine():
+    global engine
+    engine.dispose()
+    engine = create_engine(DATABASE_URL)
+
+
 def get_session():
     with Session(engine) as session:
         yield session
