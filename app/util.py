@@ -14,6 +14,7 @@ def draw2D(job_id, smiles):
 
     drawer = rdMolDraw2D.MolDraw2DSVG(1000, 1000)
     drawer.SetLineWidth(5)
+    drawer.drawOptions().clearBackground = False
     drawer.DrawMolecule(rdMolDraw2D.PrepareMolForDrawing(query))
     drawer.FinishDrawing()
     with open('app/static/previews/' + job_id + '.svg', 'w') as f:
