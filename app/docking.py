@@ -4,7 +4,6 @@ import pickle
 from pyrosetta.rosetta.core.scoring import residue_rmsd_nosuper
 from rdkit import Chem
 from rdkit.Chem import Lipinski, AllChem, Descriptors, QED
-from rdkit.Chem.Draw import rdMolDraw2D
 from sqlmodel import Session
 
 from openbabel import pybel
