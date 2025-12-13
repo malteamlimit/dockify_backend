@@ -10,7 +10,8 @@ def draw2D(job_id, smiles):
     template = Chem.MolFromMolBlock(pybel_sdf)
     query = Chem.MolFromSmiles(smiles)
     AllChem.Compute2DCoords(template)
-    AllChem.GenerateDepictionMatching2DStructure(query, template)
+    if query.HasSubstructMatch(template):
+        AllChem.GenerateDepictionMatching2DStructure(query, template)
 
     drawer = rdMolDraw2D.MolDraw2DSVG(1000, 1000)
     drawer.SetLineWidth(5)

@@ -159,16 +159,18 @@ class DockingWrapper:
 
         # Align new Mol with reference Mol and generate conformers
         if not new_mol.HasSubstructMatch(ref_mol):
-            print('ERROR: New mol has no substructure match with reference mol')
-            return
-        for i in range(nconf):
-            AllChem.ConstrainedEmbed(new_mol, ref_mol, clearConfs=False, coreConfId=0, randomseed=42 + i)
-        AllChem.MMFFOptimizeMoleculeConfs(new_mol, numThreads=0)
-        match = new_mol.GetSubstructMatch(ref_mol)
-        atom_map = list(zip(match, range(ref_mol.GetNumAtoms())))
+            for i in range(nconf):
+                AllChem.EmbedMolecule(new_mol, clearConfs=False, randomSeed=42 + i)
+            AllChem.MMFFOptimizeMoleculeConfs(new_mol, numThreads=0)
+        else:
+            for i in range(nconf):
+                AllChem.ConstrainedEmbed(new_mol, ref_mol, clearConfs=False, coreConfId=0, randomseed=42 + i)
+            AllChem.MMFFOptimizeMoleculeConfs(new_mol, numThreads=0)
+            match = new_mol.GetSubstructMatch(ref_mol)
+            atom_map = list(zip(match, range(ref_mol.GetNumAtoms())))
 
-        for cid in range(new_mol.GetNumConformers()):
-            AllChem.AlignMol(new_mol, ref_mol, atomMap=atom_map, prbCid=cid)
+            for cid in range(new_mol.GetNumConformers()):
+                AllChem.AlignMol(new_mol, ref_mol, atomMap=atom_map, prbCid=cid)
 
         # with Chem.SDWriter('constraints/rdkit_conf.sdf') as w:
         #    for cid in range(new_mol.GetNumConformers()):

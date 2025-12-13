@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from openbabel import pybel
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -15,24 +15,38 @@ class ConfBase(BaseModel):
     smiles: str
     job_id: str
 
+
+def generate_sdf_from_smiles(smiles: str) -> str:
+    """Utility: SMILES → SDF"""
+    if not smiles:
+        return ""
+
+    mol_rdkit = Chem.MolFromSmiles(smiles)
+    if not mol_rdkit:
+        raise ValueError(f"Invalid SMILES: {smiles}")
+    mol_rdkit = Chem.AddHs(mol_rdkit)
+    result = AllChem.EmbedMolecule(mol_rdkit)
+
+    if result != 0:
+        raise ValueError("Failed to generate 3D conformer")
+
+    return Chem.MolToMolBlock(mol_rdkit)
+
 @router.post("/util/genConf", tags=['util'])
 def generate_conformer(conf: ConfBase, session: Session = Depends(get_session)):
-    if conf.smiles == "":
-        return {"sdf": ""}
-    mol_rdkit = Chem.MolFromSmiles(conf.smiles)
-    mol_rdkit = Chem.AddHs(mol_rdkit)
-    AllChem.EmbedMolecule(mol_rdkit)
-    sdf = Chem.MolToMolBlock(mol_rdkit)
+    """Generate conformer and update job"""
+    try:
+        sdf = generate_sdf_from_smiles(conf.smiles)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    job: DockingJob | None  = session.get(DockingJob, conf.job_id)
+    job = session.get(DockingJob, conf.job_id)
     if job:
         job.smiles = conf.smiles
         job.sdf = sdf
 
-        draw2D(job.job_id, job.smiles)
-
-        session.add(job)
         session.commit()
+        draw2D(job.job_id, job.smiles)
 
     return {"sdf": sdf}
 
