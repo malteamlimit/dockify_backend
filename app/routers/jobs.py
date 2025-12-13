@@ -1,8 +1,9 @@
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, status
+from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, status, HTTPException
 from sqlmodel import Session, select
 
+from .util import generate_sdf_from_smiles
 from ..db.db import get_session
 from ..dependencies import get_docking_wrapper
 from .. import docking
@@ -19,8 +20,14 @@ def create_job(request: DockingJob, session: Session = Depends(get_session)):
     Create a new docking job.
     """
     session.add(request)
-    session.commit()
+    session.flush()
+    if not request.sdf:
+        try:
+            request.sdf = generate_sdf_from_smiles(request.smiles)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
+    session.commit()
     draw2D(request.job_id, request.smiles)
 
     return {request.model_dump_json()}
