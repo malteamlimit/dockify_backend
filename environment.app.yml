@@ -1,0 +1,11 @@
+name: dockify
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - fastapi
+  - uvicorn
+  - sqlmodel
+  - python-multipart
+

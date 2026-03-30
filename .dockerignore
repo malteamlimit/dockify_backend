@@ -1,0 +1,28 @@
+# VCS and editor files
+.git
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local runtime/output data
+data/
+output/
+app/static/poses/
+app/static/previews/
+
+# Environments and local artifacts
+.venv/
+env/
+*.db
+*.backup
+
+# Keep build context small for faster rebuilds
+paul/
+

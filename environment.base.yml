@@ -1,0 +1,13 @@
+name: dockify
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+  - https://conda.graylab.jhu.edu
+
+dependencies:
+  - python=3.10
+  - pyrosetta
+  - rdkit
+  - openbabel
+

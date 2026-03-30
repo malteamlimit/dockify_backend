@@ -1,0 +1,10 @@
+FROM continuumio/miniconda3
+
+WORKDIR /opt
+
+COPY environment.base.yml ./environment.base.yml
+
+# Keep heavy dependencies in a rarely changing base image layer.
+RUN conda env create -n dockify -f environment.base.yml && conda clean -afy
+
+ENV PATH=/opt/conda/envs/dockify/bin:$PATH

@@ -1,17 +1,15 @@
-FROM continuumio/miniconda3
-
-RUN conda create -n dockify python=3.12 -y
+FROM dockify-base:py310
 
 WORKDIR /app
 
-COPY environment.yml .
+COPY environment.app.yml ./environment.app.yml
+RUN conda env update -n dockify -f environment.app.yml && conda clean -afy
 
-RUN conda env update -n dockify -f environment.yml
+COPY app ./app
+COPY input ./input
 
-COPY requirements.txt .
-COPY app .
+RUN mkdir -p data app/static/poses app/static/previews
 
-RUN conda run -n dockify pip install --no-cache-dir -r requirements.txt
+EXPOSE 8000
 
-
-CMD ["conda", "run", "--no-capture-output", "-n", "dockify", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
