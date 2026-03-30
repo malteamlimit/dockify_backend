@@ -1,4 +1,4 @@
-FROM dockify-base:py310
+FROM optimalte/dockify-base:py310
 
 WORKDIR /app
 
