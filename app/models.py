@@ -63,7 +63,6 @@ class DockingJob(DockingJobBase, table=True):
 
 
 class ComplexResult(SQLModel, table=True):
-    violation: str | None
 
     job_id: str | None = Field(default=None, primary_key=True, foreign_key="dockingjob.job_id", ondelete="CASCADE")
     id: int | None = Field(default=None, primary_key=True)

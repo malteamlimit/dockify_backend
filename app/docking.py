@@ -286,26 +286,9 @@ class DockingWrapper:
         return work_poses
 
     def analyze_results(self, job: DockingJob, dbsession, work_poses, rdkit_mol):
-
-        for result in filter(lambda r: r.id >= job.runs, job.complexes):
-            v = []
-            if result.atom_pair_cst > 15:
-                v.append("ATOM_PAIR_CST")
-            if result.delta_g > 0.0:
-                v.append("DELTA_G")
-            result.violation = ''.join(v)
-
-
-        if job.runs == 0:
-            any_valid = any(len(result.violation) == 0 for result in job.complexes)
-            if not any_valid:
-                job.complexes = []
-                raise Exception("No valid docking results found. Please check your constraints and try again.")
-
         best_index, best_pose, best_score = 0, None, float('inf')
         for result in job.complexes:
-            print("#############resultid, violation", result.id, result.violation)
-            if result.delta_g < best_score and len(result.violation) == 0:
+            if result.delta_g < best_score:
                 best_score = result.delta_g
                 best_pose = work_poses[result.id - job.runs] if result.id - job.runs >= 0 else None
                 best_index = result.id
@@ -356,7 +339,7 @@ class DockingWrapper:
 
         header = ['name']
         for key in job.complexes[0].model_dump().keys():
-            if key not in ('pose', 'violation', 'pose_path'):
+            if key not in ('pose', 'pose_path'):
                 header.append(key)
         padding = 16
 
@@ -390,14 +373,11 @@ class DockingWrapper:
               ''.join(f'{v:.4f}'.rjust(padding) for v in [weight, hbond_acc, hbond_don, logp, qed]), sep='')
         print()
 
-        print("".join([h.rjust(padding) for h in header]) + " violation".rjust(padding))
         print('Best'.rjust(padding),
-              ''.join(safe_format(job.complexes[best_index].model_dump()[h]) for h in header[1:]),
-              str(', '.join(job.complexes[best_index].violation)).rjust(padding), sep='')
+              ''.join(safe_format(job.complexes[best_index].model_dump()[h]) for h in header[1:]), sep='')
         for i in range(len(job.complexes)):
             print(str(i + 1).rjust(padding),
-                  ''.join(safe_format(job.complexes[i].model_dump()[h]) for h in header[1:]),
-                  str(', '.join(job.complexes[i].violation)).rjust(padding), sep='')
+                  ''.join(safe_format(job.complexes[i].model_dump()[h]) for h in header[1:]), sep='')
 
 
     def run_docking(self, job_id: str, runs: int):
