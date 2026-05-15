@@ -78,7 +78,7 @@ async def run_job(
 ):
     job = session.get(DockingJob, job_id)
     if not job:
-        return False
+        raise HTTPException(status_code=404, detail="Job not found")
 
     job.job_status = JobStatus.RUNNING
     job.error = None
@@ -90,7 +90,7 @@ async def run_job(
     background_tasks.add_task(dw.run_docking, job_id, runs)
     # asyncio.create_task(dw.run_docking(job_id, runs))
 
-    return True
+    return {"queued": True}
 
 
 @router.websocket("/jobs/{job_id}/status")

@@ -1,5 +1,4 @@
 import asyncio
-import pickle
 
 from pyrosetta.rosetta.core.scoring import residue_rmsd_nosuper
 from rdkit import Chem
@@ -10,6 +9,7 @@ from openbabel import pybel
 
 from .db.db import engine
 from .models import DockingJob, JobStatus, ComplexResult
+from .util import rmsd_from_pdb
 from .websocket_handler import job_update_queues
 
 class DockingWrapper:
@@ -237,7 +237,6 @@ class DockingWrapper:
 
 
     def dock(self, job: DockingJob, dbsession, pose, runs, mover, scfx):
-        work_poses = []
         for current_repeat in range(runs):
 
             job.progress_info = "Round " + str(current_repeat + 1) + "/" + str(runs) + "..."
@@ -275,66 +274,31 @@ class DockingWrapper:
                 delta_g=idelta_scores['interface_delta_X'],
                 pairwise_energy=idelta_scores['if_X_fa_pair'],
             )
-            work_poses.append(work_pose)
-
-            work_poses[result.id - job.runs].dump_pdb("app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb")
-
+            work_pose.dump_pdb("app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb")
 
             job.complexes.append(result)
             update(self.loop, dbsession, job)
 
-        return work_poses
-
-    def analyze_results(self, job: DockingJob, dbsession, work_poses, rdkit_mol):
-        best_index, best_pose, best_score = 0, None, float('inf')
+    def analyze_results(self, job: DockingJob, dbsession, rdkit_mol):
+        best_index, best_score = 0, float('inf')
         for result in job.complexes:
             if result.delta_g < best_score:
                 best_score = result.delta_g
-                best_pose = work_poses[result.id - job.runs] if result.id - job.runs >= 0 else None
                 best_index = result.id
 
-        # if best_pose is None:
-        #     with open("app/static/poses/" + job.job_id + "#best.pkl", "rb") as f:
-        #         best_pose = pickle.load(f)
-        #     calc_for = filter(lambda r: r.id >= job.runs, job.complexes)
-        # else:
-        #     with open("app/static/poses/" + job.job_id + "#best.pkl", "wb") as f:
-        #         pickle.dump(best_pose, f)
-        #     calc_for = job.complexes
+        best_pdb = "app/static/poses/" + job.job_id + "_" + str(best_index) + ".pdb"
 
-
-        all_poses = []
-        if best_pose is None:
-            with open("app/static/poses/" + job.job_id + "#" + str(best_index) + ".pkl", "rb") as f:
-                best_pose = pickle.load(f)
-            for i in range(job.runs, len(job.complexes)):
-                with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "wb") as f:
-                    pickle.dump(work_poses[i - job.runs], f)
-            calc_for_all = False
+        # job.runs is still the pre-run complex count here. If the new best is among
+        # the freshly docked runs every RMSD changes; otherwise the previous best is
+        # unchanged and only the new runs need a value.
+        if best_index >= job.runs:
+            targets = job.complexes
         else:
-            if job.runs > 0:
-                for i in range(job.runs):
-                    with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "rb") as f:
-                        all_poses.append(pickle.load(f))
-            for i in range(job.runs, len(job.complexes)):
-                with open("app/static/poses/" + job.job_id + "#" + str(i) + ".pkl", "wb") as f:
-                    pickle.dump(work_poses[i - job.runs], f)
-            all_poses.extend(work_poses)
-            calc_for_all = True
+            targets = [r for r in job.complexes if r.id >= job.runs]
 
-
-        res_selector = self.pyrosetta.rosetta.core.select.residue_selector.ResidueIndexSelector(
-            best_pose.total_residue())
-        rmsd_calc = self.pyrosetta.rosetta.core.simple_metrics.metrics.RMSDMetric()
-        rmsd_calc.set_residue_selector(res_selector)
-        rmsd_calc.set_comparison_pose(best_pose)
-
-        if calc_for_all:
-            for result in job.complexes:
-                result.rmsd = rmsd_calc.calculate(all_poses[result.id])
-        else:
-            for result in filter(lambda r: r.id >= job.runs, job.complexes):
-                result.rmsd = rmsd_calc.calculate(work_poses[result.id - job.runs])
+        for result in targets:
+            pose_pdb = "app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb"
+            result.rmsd = rmsd_from_pdb(pose_pdb, best_pdb)
 
 
         header = ['name']
@@ -417,13 +381,13 @@ class DockingWrapper:
                 mover = protocol_xml.get_mover("ParsedProtocol")
                 scfx = protocol_xml.get_score_function("hard_rep")
 
-                work_poses = self.dock(job, dbsession, lig_pose, runs, mover, scfx)
+                self.dock(job, dbsession, lig_pose, runs, mover, scfx)
 
                 job.progress_info = "Finished Docking Process..."
                 job.progress = 90
                 update(self.loop, dbsession, job)
 
-                self.analyze_results(job, dbsession, work_poses, new_mol)
+                self.analyze_results(job, dbsession, new_mol)
 
                 job.progress_info = "Finalized Calculation..."
                 job.progress = 100
