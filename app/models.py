@@ -8,9 +8,11 @@ from sqlmodel import SQLModel, Field, Relationship
 
 class JobStatus(str, Enum):
     DRAFT = "draft"
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class DockingJobBase(SQLModel):
