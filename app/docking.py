@@ -12,6 +12,55 @@ from .models import DockingJob, JobStatus, ComplexResult
 from .util import rmsd_from_pdb
 from .websocket_handler import job_update_queues
 
+
+def compute_best_and_rmsd(job: DockingJob, recompute_all: bool = False):
+    """Determine the best valid complex and recompute pose RMSD relative to it.
+
+    A complex is valid when it violates neither the job's delta_g_threshold nor
+    its atom_pair_cst_threshold. The best valid complex (lowest delta_g among
+    the valid ones) becomes job.best_complex_nr and serves as the RMSD
+    reference. When every complex violates a threshold, best_complex_nr is set
+    to None and RMSD falls back to the lowest-delta_g pose as reference, so the
+    RMSD column stays populated.
+
+    With recompute_all=True every RMSD is recalculated (used after a threshold
+    change, where the reference can move arbitrarily). Otherwise the original
+    incremental optimisation applies: only freshly docked runs are recomputed
+    unless the reference itself is among them.
+    """
+    complexes = job.complexes
+    if not complexes:
+        job.best_complex_nr = None
+        return
+
+    valid = [
+        c for c in complexes
+        if c.delta_g < job.delta_g_threshold
+        and c.atom_pair_cst < job.atom_pair_cst_threshold
+    ]
+    if valid:
+        best = min(valid, key=lambda c: c.delta_g)
+        job.best_complex_nr = best.id
+    else:
+        best = min(complexes, key=lambda c: c.delta_g)
+        job.best_complex_nr = None
+
+    ref_index = best.id
+    best_pdb = "app/static/poses/" + job.job_id + "_" + str(ref_index) + ".pdb"
+
+    # job.runs is still the pre-run complex count during docking. If the
+    # reference is among the freshly docked runs every RMSD changes; otherwise
+    # the previous reference is unchanged and only the new runs need a value.
+    if recompute_all or ref_index >= job.runs:
+        targets = complexes
+    else:
+        targets = [c for c in complexes if c.id >= job.runs]
+
+    for result in targets:
+        pose_pdb = "app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb"
+        result.rmsd = rmsd_from_pdb(pose_pdb, best_pdb)
+
+
 class DockingWrapper:
     def __init__(self, loop=None):
         import pyrosetta
@@ -280,26 +329,7 @@ class DockingWrapper:
             update(self.loop, dbsession, job)
 
     def analyze_results(self, job: DockingJob, dbsession, rdkit_mol):
-        best_index, best_score = 0, float('inf')
-        for result in job.complexes:
-            if result.delta_g < best_score:
-                best_score = result.delta_g
-                best_index = result.id
-
-        best_pdb = "app/static/poses/" + job.job_id + "_" + str(best_index) + ".pdb"
-
-        # job.runs is still the pre-run complex count here. If the new best is among
-        # the freshly docked runs every RMSD changes; otherwise the previous best is
-        # unchanged and only the new runs need a value.
-        if best_index >= job.runs:
-            targets = job.complexes
-        else:
-            targets = [r for r in job.complexes if r.id >= job.runs]
-
-        for result in targets:
-            pose_pdb = "app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb"
-            result.rmsd = rmsd_from_pdb(pose_pdb, best_pdb)
-
+        compute_best_and_rmsd(job)
 
         header = ['name']
         for key in job.complexes[0].model_dump().keys():
@@ -319,7 +349,6 @@ class DockingWrapper:
         job.hbond_don = hbond_don
         job.logp = logp
         job.qed = qed
-        job.best_complex_nr = best_index
         update(self.loop, dbsession, job)
 
 
@@ -337,8 +366,9 @@ class DockingWrapper:
               ''.join(f'{v:.4f}'.rjust(padding) for v in [weight, hbond_acc, hbond_don, logp, qed]), sep='')
         print()
 
-        print('Best'.rjust(padding),
-              ''.join(safe_format(job.complexes[best_index].model_dump()[h]) for h in header[1:]), sep='')
+        if job.best_complex_nr is not None:
+            print('Best'.rjust(padding),
+                  ''.join(safe_format(job.complexes[job.best_complex_nr].model_dump()[h]) for h in header[1:]), sep='')
         for i in range(len(job.complexes)):
             print(str(i + 1).rjust(padding),
                   ''.join(safe_format(job.complexes[i].model_dump()[h]) for h in header[1:]), sep='')

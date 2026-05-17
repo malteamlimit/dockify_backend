@@ -37,6 +37,11 @@ class DockingJobBase(SQLModel):
 
     best_complex_nr: int | None = None
 
+    # Per-job violation thresholds. A complex counts as a violation when its
+    # delta_g >= delta_g_threshold or its atom_pair_cst >= atom_pair_cst_threshold.
+    delta_g_threshold: float = Field(default=0)
+    atom_pair_cst_threshold: float = Field(default=15)
+
 
 class DockingJob(DockingJobBase, table=True):
     complexes: list["ComplexResult"] = Relationship(back_populates="job", cascade_delete=True)

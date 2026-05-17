@@ -47,6 +47,35 @@ def update_job_name(job_id: str, new_name: str, session: Session = Depends(get_s
     return {"job_id": job_id, "new_name": new_name}
 
 
+@router.patch("/jobs/{job_id}/thresholds", tags=['jobs'], response_model=DockingJobWComp)
+def update_job_thresholds(
+        job_id: str,
+        delta_g_threshold: float,
+        atom_pair_cst_threshold: float,
+        session: Session = Depends(get_session)
+):
+    """
+    Update a job's violation thresholds and re-analyze its existing results.
+
+    No re-docking happens: the best valid complex and the pose RMSD are
+    recomputed from the already docked poses.
+    """
+    job = session.get(DockingJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job.delta_g_threshold = delta_g_threshold
+    job.atom_pair_cst_threshold = atom_pair_cst_threshold
+
+    if job.complexes:
+        docking.compute_best_and_rmsd(job, recompute_all=True)
+
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
 @router.delete("/jobs/{job_id}", tags=['jobs'])
 def delete_job_by_id(job_id: str, session: Session = Depends(get_session)):
     statement = select(DockingJob).where(DockingJob.job_id == job_id)
