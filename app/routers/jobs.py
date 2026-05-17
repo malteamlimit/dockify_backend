@@ -9,12 +9,12 @@ from ..dependencies import get_docking_wrapper
 from .. import docking
 from ..models import *
 from ..util import draw2D
-from ..websocket_handler import get_job_status
+from ..websocket_handler import job_status_stream, notify_job_update
 
 router = APIRouter()
 
 
-@router.post("/jobs/create", tags=['jobs'])
+@router.post("/jobs/create", tags=['jobs'], response_model=DockingJobWComp)
 def create_job(request: DockingJob, session: Session = Depends(get_session)):
     """
     Create a new docking job.
@@ -28,9 +28,10 @@ def create_job(request: DockingJob, session: Session = Depends(get_session)):
             raise HTTPException(status_code=400, detail=str(e))
 
     session.commit()
+    session.refresh(request)
     draw2D(request.job_id, request.smiles)
 
-    return {request.model_dump_json()}
+    return request
 
 
 @router.patch("/jobs/{job_id}/name", tags=['jobs'])
@@ -85,6 +86,7 @@ def delete_job_by_id(job_id: str, session: Session = Depends(get_session)):
 
     session.delete(result)
     session.commit()
+    notify_job_update(job_id)
     # delete files in poses and previews with the name containing job_id
     poses_path = 'app/static/poses/'
     previews_path = 'app/static/previews/'
@@ -109,22 +111,53 @@ async def run_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    job.job_status = JobStatus.RUNNING
+    # QUEUED until a worker thread picks the job up; run_docking changes it to
+    # RUNNING
+    job.job_status = JobStatus.QUEUED
     job.error = None
-    job.progress_info = "Preparing Ligand..."
+    job.progress_info = "Queued..."
     job.progress = 0
     session.add(job)
     session.commit()
+    notify_job_update(job_id)
 
     background_tasks.add_task(dw.run_docking, job_id, runs)
-    # asyncio.create_task(dw.run_docking(job_id, runs))
 
     return {"queued": True}
 
 
-@router.websocket("/jobs/{job_id}/status")
-async def check_job(websocket: WebSocket, job_id: str):
-    await get_job_status(websocket, job_id)
+@router.post("/jobs/{job_id}/cancel", tags=['jobs'])
+def cancel_job(job_id: str, session: Session = Depends(get_session)):
+    """
+    Request cancellation of a queued or running job.
+
+    The flag is picked up between docking rounds, so a running
+    job stops before its next round rather than instantly. A queued job is
+    cancelled immediately since it has not started yet.
+    """
+    job = session.get(DockingJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.job_status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+        raise HTTPException(status_code=409, detail="Job is not running")
+
+    docking.request_cancel(job_id)
+
+    if job.job_status == JobStatus.QUEUED:
+        # Not started yet -- reflect the cancellation right away. run_docking
+        # will still see the flag and skip the job when the worker reaches it.
+        job.job_status = JobStatus.CANCELLED
+        job.progress_info = "Cancelled."
+        session.add(job)
+        session.commit()
+        notify_job_update(job_id)
+
+    return {"cancelling": True}
+
+
+@router.websocket("/jobs/status")
+async def job_status(websocket: WebSocket):
+    await job_status_stream(websocket)
 
 
 

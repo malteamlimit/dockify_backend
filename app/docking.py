@@ -1,5 +1,3 @@
-import asyncio
-
 from pyrosetta.rosetta.core.scoring import residue_rmsd_nosuper
 from rdkit import Chem
 from rdkit.Chem import Lipinski, AllChem, Descriptors, QED
@@ -10,7 +8,30 @@ from openbabel import pybel
 from .db.db import engine
 from .models import DockingJob, JobStatus, ComplexResult
 from .util import rmsd_from_pdb
-from .websocket_handler import job_update_queues
+from .websocket_handler import notify_job_update
+
+
+# job_ids for which a cancellation has been requested
+# cancellation before next round, since calculation
+# can't be interrupted.
+_cancel_requested: set[str] = set()
+
+
+class JobCancelledException(Exception):
+    """Raised inside the docking flow when a job's cancellation was requested."""
+
+
+def request_cancel(job_id: str) -> None:
+    """Mark a job for cancellation; picked up by the docking loop."""
+    _cancel_requested.add(job_id)
+
+
+def is_cancel_requested(job_id: str) -> bool:
+    return job_id in _cancel_requested
+
+
+def clear_cancel(job_id: str) -> None:
+    _cancel_requested.discard(job_id)
 
 
 def compute_best_and_rmsd(job: DockingJob, recompute_all: bool = False):
@@ -62,12 +83,10 @@ def compute_best_and_rmsd(job: DockingJob, recompute_all: bool = False):
 
 
 class DockingWrapper:
-    def __init__(self, loop=None):
+    def __init__(self):
         import pyrosetta
         self.pyrosetta = pyrosetta
         self.pyrosetta.init()
-
-        self.loop = loop
 
 
 
@@ -288,9 +307,12 @@ class DockingWrapper:
     def dock(self, job: DockingJob, dbsession, pose, runs, mover, scfx):
         for current_repeat in range(runs):
 
+            if is_cancel_requested(job.job_id):
+                raise JobCancelledException()
+
             job.progress_info = "Round " + str(current_repeat + 1) + "/" + str(runs) + "..."
             job.progress = round(10 + 80 * (current_repeat + 1) / runs)
-            update(self.loop, dbsession, job)
+            update(dbsession, job)
 
             work_pose = self.pyrosetta.rosetta.core.pose.Pose()
             work_pose.detached_copy(pose)
@@ -326,7 +348,7 @@ class DockingWrapper:
             work_pose.dump_pdb("app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb")
 
             job.complexes.append(result)
-            update(self.loop, dbsession, job)
+            update(dbsession, job)
 
     def analyze_results(self, job: DockingJob, dbsession, rdkit_mol):
         compute_best_and_rmsd(job)
@@ -349,7 +371,7 @@ class DockingWrapper:
         job.hbond_don = hbond_don
         job.logp = logp
         job.qed = qed
-        update(self.loop, dbsession, job)
+        update(dbsession, job)
 
 
         def safe_format(value):
@@ -379,6 +401,14 @@ class DockingWrapper:
             job = dbsession.get(DockingJob, job_id)
 
             try:
+                # Cancelled while still QUEUED, before this worker picked it up.
+                if is_cancel_requested(job_id):
+                    raise JobCancelledException()
+
+                # The job sits in QUEUED until a worker thread actually picks
+                # it up; flip to RUNNING now that docking is starting.
+                job.job_status = JobStatus.RUNNING
+                update(dbsession, job)
 
                 pybel_mol = next(pybel.readfile("sdf", 'input/ref_ligand_core.sdf'))
                 pybel_sdf = pybel_mol.write('sdf')
@@ -404,7 +434,7 @@ class DockingWrapper:
 
                 job.progress_info = "Preparing Docking Protocol..."
                 job.progress = 5
-                update(self.loop, dbsession, job)
+                update(dbsession, job)
 
                 protocol_xml = self.pyrosetta.rosetta.protocols.rosetta_scripts.XmlObjects.create_from_file(
                     "input/transform_std.xml")
@@ -415,7 +445,7 @@ class DockingWrapper:
 
                 job.progress_info = "Finished Docking Process..."
                 job.progress = 90
-                update(self.loop, dbsession, job)
+                update(dbsession, job)
 
                 self.analyze_results(job, dbsession, new_mol)
 
@@ -423,18 +453,34 @@ class DockingWrapper:
                 job.progress = 100
                 job.job_status = JobStatus.COMPLETED
                 job.runs = job.runs + runs
-                update(self.loop, dbsession, job)
+                update(dbsession, job)
+
+            except JobCancelledException:
+                # Keep whatever runs already finished: their poses and complexes
+                # are real results. Sync job.runs to them so a later extension
+                # does not collide on complex ids, and recompute the best pose.
+                job.runs = len(job.complexes)
+                if job.complexes:
+                    compute_best_and_rmsd(job)
+                job.job_status = JobStatus.CANCELLED
+                job.progress = 100
+                job.progress_info = "Cancelled."
+                update(dbsession, job)
 
             except Exception as e:
+                dbsession.rollback()
+                job.runs = len(job.complexes)
                 job.job_status = JobStatus.FAILED
                 job.error = str(e)
-                update(self.loop, dbsession, job)
-                raise e
+                update(dbsession, job)
+                raise
+
+            finally:
+                clear_cancel(job_id)
 
 
-def update(loop: asyncio.AbstractEventLoop, dbsession: Session, job: DockingJob):
+def update(dbsession: Session, job: DockingJob):
     dbsession.add(job)
     dbsession.commit()
-    if job.job_id in job_update_queues:
-        asyncio.run_coroutine_threadsafe(job_update_queues[job.job_id].put(True), loop)
+    notify_job_update(job.job_id)
     print("UPDATE", job.job_id, job.job_status, job.progress_info, job.progress)

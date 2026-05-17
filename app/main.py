@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from . import docking
 from .db import db
 from .routers import util, jobs, database
+from .websocket_handler import set_event_loop, recover_orphaned_jobs
 # from .dependencies import thread_local_data
 
 
@@ -20,6 +21,10 @@ async def lifespan(app: FastAPI):
     print("Event Loop initialized:", main_event_loop)
     # thread_local_data.docking_wrapper = docking.DockingWrapper()
     db.init_db()
+    # let background threads broadcast job updates onto this loop.
+    set_event_loop(main_event_loop)
+    # recover runs from previuos session (after reload)
+    recover_orphaned_jobs()
     print(30 * "*", "Docking wrapper & DB initialized.")
     yield
 
