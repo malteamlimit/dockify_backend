@@ -57,11 +57,11 @@ def select_target(target_id: str, session: Session = Depends(get_session)):
 
 @router.get("/target/{target_id}/preview", tags=["target"])
 def get_target_preview(target_id: str):
-    """Serve the target's relaxed PDB file for the 3D card preview."""
+    """Serve the full complex PDB (with ligand) for the 3D card preview."""
     target = AVAILABLE_TARGETS.get(target_id)
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
-    pose_path = target["pose_path"]
-    if not os.path.exists(pose_path):
+    preview_path = target.get("preview_path", target["pose_path"])
+    if not os.path.exists(preview_path):
         raise HTTPException(status_code=404, detail="Preview file not found")
-    return FileResponse(pose_path, media_type="text/plain", filename=f"{target_id}.pdb")
+    return FileResponse(preview_path, media_type="text/plain", filename=f"{target_id}.pdb")

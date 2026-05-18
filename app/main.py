@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import docking
 from .db import db
-from .routers import util, jobs, database
+from .routers import util, jobs, database, target
 from .websocket_handler import set_event_loop, recover_orphaned_jobs
 # from .dependencies import thread_local_data
 
@@ -51,6 +51,7 @@ app.mount("/static", StaticFiles(directory="app/static/"), name="static")
 app.include_router(util.router)
 app.include_router(jobs.router)
 app.include_router(database.router)
+app.include_router(target.router)
 
 
 @app.get("/")

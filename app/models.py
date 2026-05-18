@@ -92,3 +92,9 @@ class DockingJobWComp(DockingJobBase):
     model_config = ConfigDict(from_attributes=True)
 
     complexes: list[ComplexResult] = []
+
+
+class TargetConfig(SQLModel, table=True):
+    """Singleton row (id=1) storing the currently selected docking target."""
+    id: int = Field(default=1, primary_key=True)
+    target_id: str
