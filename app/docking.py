@@ -5,8 +5,9 @@ from sqlmodel import Session
 
 from openbabel import pybel
 
-from .db.db import engine
-from .models import DockingJob, JobStatus, ComplexResult
+from .db import db as _db
+from .models import DockingJob, JobStatus, ComplexResult, TargetConfig
+from .targets import AVAILABLE_TARGETS
 from .util import rmsd_from_pdb
 from .websocket_handler import notify_job_update
 
@@ -32,6 +33,11 @@ def is_cancel_requested(job_id: str) -> bool:
 
 def clear_cancel(job_id: str) -> None:
     _cancel_requested.discard(job_id)
+
+
+def clear_all_cancels() -> None:
+    """Clear all pending cancel flags – call on DB reset so stale flags don't linger."""
+    _cancel_requested.clear()
 
 
 def compute_best_and_rmsd(job: DockingJob, recompute_all: bool = False):
@@ -397,8 +403,13 @@ class DockingWrapper:
 
 
     def run_docking(self, job_id: str, runs: int):
-        with Session(engine) as dbsession:
+        with Session(_db.engine) as dbsession:
             job = dbsession.get(DockingJob, job_id)
+
+            if job is None:
+                # Job was deleted (e.g. DB reset) before this worker picked it up.
+                clear_cancel(job_id)
+                return
 
             try:
                 # Cancelled while still QUEUED, before this worker picked it up.
@@ -410,14 +421,21 @@ class DockingWrapper:
                 job.job_status = JobStatus.RUNNING
                 update(dbsession, job)
 
-                pybel_mol = next(pybel.readfile("sdf", 'input/ref_ligand_core.sdf'))
+                target_config = dbsession.get(TargetConfig, 1)
+                if not target_config:
+                    raise ValueError("No docking target selected. Please select a target first.")
+                target = AVAILABLE_TARGETS.get(target_config.target_id)
+                if not target:
+                    raise ValueError(f"Unknown target: {target_config.target_id}")
+
+                pybel_mol = next(pybel.readfile("sdf", target["core_ligand_path"]))
                 pybel_sdf = pybel_mol.write('sdf')
 
                 # RDKits sanitization step automatically detects aromaticity
                 # I am assuming that it is best to provide molecules in kekulized form with all hydrogens present
                 ref_mol = Chem.MolFromMolBlock(pybel_sdf)
 
-                pose = self.pyrosetta.pose_from_pdb("input/7f83_relax.pdb")
+                pose = self.pyrosetta.pose_from_pdb(target["pose_path"])
 
                 # DEFAULT: "COc5cc(OCc1ccncc1)cc6nc(c4cc(CCc2ccnnc2)c(OCCO)c(Cc3cnccn3)c4)[nH]c(=O)c56"
                 # DEFAULT: "CN(C(=O)CN3CC2(CCN(C(=O)c1cccnc1)CC2)C3)c5ccc4COCc4c5"
@@ -456,23 +474,27 @@ class DockingWrapper:
                 update(dbsession, job)
 
             except JobCancelledException:
-                # Keep whatever runs already finished: their poses and complexes
-                # are real results. Sync job.runs to them so a later extension
-                # does not collide on complex ids, and recompute the best pose.
-                job.runs = len(job.complexes)
-                if job.complexes:
-                    compute_best_and_rmsd(job)
-                job.job_status = JobStatus.CANCELLED
-                job.progress = 100
-                job.progress_info = "Cancelled."
-                update(dbsession, job)
+                try:
+                    job.runs = len(job.complexes)
+                    if job.complexes:
+                        compute_best_and_rmsd(job)
+                    job.job_status = JobStatus.CANCELLED
+                    job.progress = 100
+                    job.progress_info = "Cancelled."
+                    update(dbsession, job)
+                except Exception as inner:
+                    print(f"[run_docking] Could not persist cancel state for {job_id}: {inner}")
 
             except Exception as e:
-                dbsession.rollback()
-                job.runs = len(job.complexes)
-                job.job_status = JobStatus.FAILED
-                job.error = str(e)
-                update(dbsession, job)
+                try:
+                    dbsession.rollback()
+                    job.runs = len(job.complexes)
+                    job.job_status = JobStatus.FAILED
+                    job.error = str(e)
+                    update(dbsession, job)
+                except Exception as inner:
+                    # DB is gone or malformed (e.g. after a reset) – log and abort cleanly.
+                    print(f"[run_docking] Could not persist failure state for {job_id}: {inner}")
                 raise
 
             finally:

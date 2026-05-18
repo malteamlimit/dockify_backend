@@ -6,7 +6,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors, QED
 
 from app.db.db import get_session
-from app.models import DockingJob
+from app.models import DockingJob, TargetConfig
+from app.targets import AVAILABLE_TARGETS
 from app.util import draw2D
 
 router = APIRouter()
@@ -54,7 +55,12 @@ def generate_conformer(conf: ConfBase, session: Session = Depends(get_session)):
 def generate_props(conf: ConfBase, session: Session = Depends(get_session)):
     mol_rdkit = Chem.MolFromSmiles(conf.smiles)
 
-    pybel_mol = next(pybel.readfile("sdf", 'input/ref_ligand_core.sdf'))
+    target_config = session.get(TargetConfig, 1)
+    if not target_config or target_config.target_id not in AVAILABLE_TARGETS:
+        raise HTTPException(status_code=400, detail="No docking target selected.")
+    core_ligand_path = AVAILABLE_TARGETS[target_config.target_id]["core_ligand_path"]
+
+    pybel_mol = next(pybel.readfile("sdf", core_ligand_path))
     pybel_sdf = pybel_mol.write('sdf')
     ref_mol = Chem.MolFromMolBlock(pybel_sdf)
 

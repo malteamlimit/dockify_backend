@@ -3,7 +3,7 @@ import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlmodel import Session, select
 
-from .db.db import engine
+from .db import db as _db
 from .models import DockingJob, JobStatus, DockingJobWComp
 
 
@@ -40,7 +40,7 @@ def recover_orphaned_jobs() -> None:
     the job finished -- no task is executing it anymore, so it would otherwise
     hang forever. Mark such jobs as failed so the frontend reflects reality.
     """
-    with Session(engine) as session:
+    with Session(_db.engine) as session:
         statement = select(DockingJob).where(
             DockingJob.job_status.in_([JobStatus.QUEUED, JobStatus.RUNNING])
         )
@@ -80,7 +80,7 @@ async def job_status_stream(websocket: WebSocket) -> None:
     try:
         # Initial snapshot so a freshly (re)connected client is consistent
         # even if updates happened between its REST fetch and this connect.
-        with Session(engine) as session:
+        with Session(_db.engine) as session:
             for job in session.exec(select(DockingJob)).all():
                 payload = DockingJobWComp.model_validate(job).model_dump_json()
                 await websocket.send_text(payload)
@@ -97,7 +97,7 @@ async def job_status_stream(websocket: WebSocket) -> None:
                 break
 
             job_id = next_update.result()
-            with Session(engine) as session:
+            with Session(_db.engine) as session:
                 job = session.get(DockingJob, job_id)
                 if job is None:
                     await websocket.send_json({"deleted": job_id})
