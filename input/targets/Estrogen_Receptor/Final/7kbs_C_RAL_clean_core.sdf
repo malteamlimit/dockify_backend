@@ -1,0 +1,84 @@
+RAL
+  PyMOL3.1          3D                             0
+
+ 16 17  0  0  0  0  0  0  0  0999 V2000
+   -2.8983  -30.5706   26.6738 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.5939  -31.7850   26.8318 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -2.9482  -27.7872   27.7611 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -2.6500  -26.5256   28.2829 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.3525  -26.2211   28.6503 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.1148  -24.9753   29.1544 O   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.3232  -27.1493   28.5138 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.6340  -28.4205   27.9870 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.4603  -29.7186   27.7332 S   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7613  -30.7506   27.1321 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.9316  -28.7656   27.6028 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.9930  -30.1127   27.0723 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.9750  -28.0184   27.4832 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.4387  -25.7876   28.4026 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.1767  -24.9092   29.3972 H   0  0  0  0  0  0  0  0  0  0  0  0
+    0.6956  -26.9154   28.8032 H   0  0  0  0  0  0  0  0  0  0  0  0
+  3  4  4  0  0  0  0
+  3 11  4  0  0  0  0
+  3 13  1  0  0  0  0
+  4  5  4  0  0  0  0
+  4 14  1  0  0  0  0
+  5  6  1  0  0  0  0
+  5  7  4  0  0  0  0
+  6 15  1  0  0  0  0
+  7  8  4  0  0  0  0
+  7 16  1  0  0  0  0
+  8  9  4  0  0  0  0
+  8 11  4  0  0  0  0
+  9 10  4  0  0  0  0
+  2 10  1  0  0  0  0
+ 10 12  4  0  0  0  0
+ 11 12  4  0  0  0  0
+  1 12  1  0  0  0  0
+M  END
+>  <model_server_result.job_id>
+kRWpRcSTO1u8a-U6DJqWQQ
+
+>  <model_server_result.datetime_utc>
+2026-05-05 07:10:28
+
+>  <model_server_result.server_version>
+0.9.12
+
+>  <model_server_result.query_name>
+ligand
+
+>  <model_server_result.source_id>
+pdb-bcif
+
+>  <model_server_result.entry_id>
+7kbs
+
+>  <model_server_params.name>
+atom_site
+
+>  <model_server_params.value>
+
+
+>  <id":"C","auth_seq_id":601}>
+
+
+>  <model_server_stats.io_time_ms>
+20
+
+>  <model_server_stats.parse_time_ms>
+8
+
+>  <model_server_stats.create_model_time_ms>
+4
+
+>  <model_server_stats.query_time_ms>
+251
+
+>  <model_server_stats.encode_time_ms>
+0
+
+>  <model_server_stats.element_count>
+34
+
+$$$$

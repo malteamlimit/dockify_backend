@@ -1,0 +1,88 @@
+AQ4
+  PyMOL3.1          3D                             0
+
+ 18 19  0  0  0  0  0  0  0  0999 V2000
+   18.3734   -0.3273   52.3874 H   0  0  0  0  0  0  0  0  0  0  0  0
+   25.2346    0.7264   52.9102 H   0  0  0  0  0  0  0  0  0  0  0  0
+   19.8742    1.2327   51.1550 H   0  0  0  0  0  0  0  0  0  0  0  0
+   24.3349    0.9225   53.3251 N   0  0  0  0  0  0  0  0  0  0  0  0
+   23.4458   -0.0433   53.8720 C   0  0  0  0  0  0  0  0  0  0  0  0
+   22.1153   -0.0806   53.4067 C   0  0  0  0  0  0  0  0  0  0  0  0
+   21.5877    0.7435   52.3789 C   0  0  0  0  0  0  0  0  0  0  0  0
+   20.2593    0.6278   51.9759 C   0  0  0  0  0  0  0  0  0  0  0  0
+   19.4324   -0.2737   52.6397 C   0  0  0  0  0  0  0  0  0  0  0  0
+   19.9562   -1.1100   53.6284 C   0  0  0  0  0  0  0  0  0  0  0  0
+   21.2849   -1.0294   54.0215 C   0  0  0  0  0  0  0  0  0  0  0  0
+   21.7180   -1.8553   54.9768 N   0  0  0  0  0  0  0  0  0  0  0  0
+   23.0032   -1.7472   55.3277 C   0  0  0  0  0  0  0  0  0  0  0  0
+   23.8879   -0.8830   54.8248 N   0  0  0  0  0  0  0  0  0  0  0  0
+   23.9153    1.8413   53.4209 H   0  0  0  0  0  0  0  0  0  0  0  0
+   22.2253    1.4587   51.8647 H   0  0  0  0  0  0  0  0  0  0  0  0
+   19.3042   -1.8350   54.1109 H   0  0  0  0  0  0  0  0  0  0  0  0
+   23.3610   -2.4234   56.0965 H   0  0  0  0  0  0  0  0  0  0  0  0
+  2  4  1  0  0  0  0
+  4  5  1  0  0  0  0
+  4 15  1  0  0  0  0
+  5  6  4  0  0  0  0
+  5 14  4  0  0  0  0
+  6  7  4  0  0  0  0
+  6 11  4  0  0  0  0
+  7  8  4  0  0  0  0
+  7 16  1  0  0  0  0
+  3  8  1  0  0  0  0
+  8  9  4  0  0  0  0
+  1  9  1  0  0  0  0
+  9 10  4  0  0  0  0
+ 10 11  4  0  0  0  0
+ 10 17  1  0  0  0  0
+ 11 12  4  0  0  0  0
+ 12 13  4  0  0  0  0
+ 13 14  4  0  0  0  0
+ 13 18  1  0  0  0  0
+M  END
+>  <model_server_result.job_id>
+LQIBByh06_JK2uyPwaURmA
+
+>  <model_server_result.datetime_utc>
+2026-04-27 09:45:40
+
+>  <model_server_result.server_version>
+0.9.12
+
+>  <model_server_result.query_name>
+ligand
+
+>  <model_server_result.source_id>
+pdb-bcif
+
+>  <model_server_result.entry_id>
+1m17
+
+>  <model_server_params.name>
+atom_site
+
+>  <model_server_params.value>
+
+
+>  <id":"B","auth_seq_id":999}>
+
+
+>  <model_server_stats.io_time_ms>
+20
+
+>  <model_server_stats.parse_time_ms>
+7
+
+>  <model_server_stats.create_model_time_ms>
+4
+
+>  <model_server_stats.query_time_ms>
+183
+
+>  <model_server_stats.encode_time_ms>
+0
+
+>  <model_server_stats.element_count>
+29
+
+$$$$
