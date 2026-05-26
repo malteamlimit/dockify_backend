@@ -69,7 +69,8 @@ def update_job_thresholds(
     job.atom_pair_cst_threshold = atom_pair_cst_threshold
 
     if job.complexes:
-        docking.compute_best_and_rmsd(job, recompute_all=True)
+        docking._update_best_complex(job)
+        docking.compute_rmsd(job, recompute_all=True)
 
     session.add(job)
     session.commit()

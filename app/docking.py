@@ -1,6 +1,6 @@
 from pyrosetta.rosetta.core.scoring import residue_rmsd_nosuper
 from rdkit import Chem
-from rdkit.Chem import Lipinski, AllChem, Descriptors, QED
+from rdkit.Chem import Lipinski, AllChem
 from sqlmodel import Session
 
 from openbabel import pybel
@@ -40,44 +40,47 @@ def clear_all_cancels() -> None:
     _cancel_requested.clear()
 
 
-def compute_best_and_rmsd(job: DockingJob, recompute_all: bool = False):
-    """Determine the best valid complex and recompute pose RMSD relative to it.
+def _update_best_complex(job: DockingJob) -> None:
+    """Set job.best_complex_nr to the id of the best threshold-passing complex.
 
-    A complex is valid when it violates neither the job's delta_g_threshold nor
-    its atom_pair_cst_threshold. The best valid complex (lowest delta_g among
-    the valid ones) becomes job.best_complex_nr and serves as the RMSD
-    reference. When every complex violates a threshold, best_complex_nr is set
-    to None and RMSD falls back to the lowest-delta_g pose as reference, so the
-    RMSD column stays populated.
-
-    With recompute_all=True every RMSD is recalculated (used after a threshold
-    change, where the reference can move arbitrarily). Otherwise the original
-    incremental optimisation applies: only freshly docked runs are recomputed
-    unless the reference itself is among them.
+    A complex is valid when it violates neither delta_g_threshold nor
+    atom_pair_cst_threshold. best_complex_nr is set to None when no valid
+    complex exists.
     """
-    complexes = job.complexes
-    if not complexes:
+    if not job.complexes:
         job.best_complex_nr = None
         return
-
     valid = [
-        c for c in complexes
+        c for c in job.complexes
         if c.delta_g < job.delta_g_threshold
         and c.atom_pair_cst < job.atom_pair_cst_threshold
     ]
-    if valid:
-        best = min(valid, key=lambda c: c.delta_g)
-        job.best_complex_nr = best.id
-    else:
-        best = min(complexes, key=lambda c: c.delta_g)
-        job.best_complex_nr = None
+    job.best_complex_nr = min(valid, key=lambda c: c.delta_g).id if valid else None
 
-    ref_index = best.id
+
+def compute_rmsd(job: DockingJob, recompute_all: bool = False) -> None:
+    """Compute pose RMSD for all complexes relative to the best reference pose.
+
+    Call after _update_best_complex so best_complex_nr is current. The
+    reference is best_complex_nr when set, otherwise the lowest-delta_g pose
+    (so the RMSD column stays populated even when every complex violates a
+    threshold).
+
+    With recompute_all=True every RMSD is recalculated (needed after a
+    threshold change where the reference may shift arbitrarily). Otherwise only
+    freshly docked runs are updated unless the reference itself changed.
+    """
+    complexes = job.complexes
+    if not complexes:
+        return
+
+    if job.best_complex_nr is not None:
+        ref_index = job.best_complex_nr
+    else:
+        ref_index = min(complexes, key=lambda c: c.delta_g).id
+
     best_pdb = "app/static/poses/" + job.job_id + "_" + str(ref_index) + ".pdb"
 
-    # job.runs is still the pre-run complex count during docking. If the
-    # reference is among the freshly docked runs every RMSD changes; otherwise
-    # the previous reference is unchanged and only the new runs need a value.
     if recompute_all or ref_index >= job.runs:
         targets = complexes
     else:
@@ -354,53 +357,8 @@ class DockingWrapper:
             work_pose.dump_pdb("app/static/poses/" + job.job_id + "_" + str(result.id) + ".pdb")
 
             job.complexes.append(result)
+            _update_best_complex(job)
             update(dbsession, job)
-
-    def analyze_results(self, job: DockingJob, dbsession, rdkit_mol):
-        compute_best_and_rmsd(job)
-
-        header = ['name']
-        for key in job.complexes[0].model_dump().keys():
-            if key not in ('pose', 'pose_path'):
-                header.append(key)
-        padding = 16
-
-        # TODO: simplify / remove debug output
-        weight = Descriptors.MolWt(rdkit_mol)
-        hbond_acc = Descriptors.NOCount(rdkit_mol)
-        hbond_don = Descriptors.NHOHCount(rdkit_mol)
-        logp = Descriptors.MolLogP(rdkit_mol)
-        qed = QED.qed(rdkit_mol)
-
-        job.weight = weight
-        job.hbond_acc = hbond_acc
-        job.hbond_don = hbond_don
-        job.logp = logp
-        job.qed = qed
-        update(dbsession, job)
-
-
-        def safe_format(value):
-            if value is None:
-                return 'N/A'.rjust(padding)
-            try:
-                return f'{float(value):.4f}'.rjust(padding)
-            except (TypeError, ValueError):
-                return str(value).rjust(padding)
-
-        print(''.rjust(padding), ''.join(h.rjust(padding) for h in ['weight', 'hbond_acc', 'hbond_don', 'logp', 'qed']),
-              sep='')
-        print('Ligand Prop'.rjust(padding),
-              ''.join(f'{v:.4f}'.rjust(padding) for v in [weight, hbond_acc, hbond_don, logp, qed]), sep='')
-        print()
-
-        if job.best_complex_nr is not None:
-            print('Best'.rjust(padding),
-                  ''.join(safe_format(job.complexes[job.best_complex_nr].model_dump()[h]) for h in header[1:]), sep='')
-        for i in range(len(job.complexes)):
-            print(str(i + 1).rjust(padding),
-                  ''.join(safe_format(job.complexes[i].model_dump()[h]) for h in header[1:]), sep='')
-
 
     def run_docking(self, job_id: str, runs: int):
         with Session(_db.engine) as dbsession:
@@ -440,7 +398,7 @@ class DockingWrapper:
                 # DEFAULT: "COc5cc(OCc1ccncc1)cc6nc(c4cc(CCc2ccnnc2)c(OCCO)c(Cc3cnccn3)c4)[nH]c(=O)c56"
                 # DEFAULT: "CN(C(=O)CN3CC2(CCN(C(=O)c1cccnc1)CC2)C3)c5ccc4COCc4c5"
                 smiles = job.smiles
-                lig_pose, new_mol, pos_to_name = self.prepare_pose(smiles, pose, ref_mol)
+                lig_pose, _, pos_to_name = self.prepare_pose(smiles, pose, ref_mol)
 
                 # DEFAULT "[
                 #         [92, 'HE2', 'O5', 2.5, 0.25],
@@ -465,7 +423,9 @@ class DockingWrapper:
                 job.progress = 90
                 update(dbsession, job)
 
-                self.analyze_results(job, dbsession, new_mol)
+                _update_best_complex(job)
+                compute_rmsd(job)
+                update(dbsession, job)
 
                 job.progress_info = "Finalized Calculation..."
                 job.progress = 100
@@ -477,7 +437,8 @@ class DockingWrapper:
                 try:
                     job.runs = len(job.complexes)
                     if job.complexes:
-                        compute_best_and_rmsd(job)
+                        _update_best_complex(job)
+                        compute_rmsd(job)
                     job.job_status = JobStatus.CANCELLED
                     job.progress = 100
                     job.progress_info = "Cancelled."
